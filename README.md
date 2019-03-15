@@ -1,7 +1,7 @@
 # Analysis of large single-cell RNA-seq datasets in R/Bioconductor
 
 # Instructor(s) name(s) and contact information
-Davide Risso (@drisso, risso.davide@gmail.com), Stephanie Hicks (@stephaniehicks)
+Davide Risso (@drisso, risso.davide@gmail.com), Stephanie Hicks (@stephaniehicks, shicks19@jhu.edu)
 
 # Workshop Description
 
