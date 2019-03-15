@@ -28,13 +28,13 @@ This will be a hands-on workshop, in which each student, using their laptop, wil
 
 1 hr workshop:
 
-| Activity                                   | Time |
-|--------------------------------------------|------|
-| Intro to single-cell RNA-seq analysis      | 10m  |
-| scater (Quality Control)                   | 10m  |
-| scran (normalization)                      | 10m  |
-| BiocSingular (dimensionality reduction)    | 10m  |
-| mbkmeans (clustering)                      | 10m  |
+| Activity                                        | Time |
+|-------------------------------------------------|------|
+| Intro to single-cell RNA-seq analysis           | 10m  |
+| Intro to HDF5 and DelayedArray                  | 10m  |
+| Quality control and normalization               | 10m  |
+| Principal Component Analysis with BiocSingular  | 10m  |
+| Clustering with mbkmeans                        | 10m  |
 
 # Workshop goals and objectives
 
