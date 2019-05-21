@@ -1,0 +1,40 @@
+Package: bioc2019singlecell
+Type: Package
+Title: Analysis of Large Single-Cell RNA-Seq Datasets in R/Bioconductor
+Version: 0.0.1
+Authors@R: 
+    c(person("Davide","Risso", role=c("aut","cre", "cph"), 
+          email="risso.davide@gmail.com" ),
+      person("Stephanie","Hicks", role="aut", 
+          email="shicks19@jhu.edu"),
+      person("Elizabeth", "Purdom", role="aut",
+          email="epurdom@stat.berkeley.edu"))
+Description: 
+    In this workshop, we will illustrate some questions that can be answered 
+    using scRNA-seq data and demonstrate through case studies and tutorials
+    how to answer those questions using R / Bioconductor packages.
+License: file LICENSE
+Depends: 
+   R (>= 3.6),
+   SingleCellExperiment
+Imports:
+   BiocParallel,
+   mbkmeans,
+   HCAData,
+   ExperimentHub,
+   stringr,
+   dplyr,
+   scater,
+   scran,
+   pryr,
+   BiocSingular,
+   DelayedArray,
+   HDF5Array,
+   DelayedMatrixStats,
+   uwot
+Suggests: 
+    knitr,
+    rmarkdown,
+    testthat
+VignetteBuilder: knitr
+RoxygenNote: 6.1.1

@@ -1,0 +1,352 @@
+---
+title: "Analysis of Large Single-Cell RNA-Seq Datasets in R/Bioconductor"
+author: "Davide Risso, Stephanie Hicks, Elizabeth Purdom"
+date: "Last modified: May 21, 2019; Compiled: `r format(Sys.time(), '%B %d, %Y')`"
+bibliography: biblio.bib
+output:
+  BiocStyle::html_document:
+    toc: true
+vignette: >
+  %\VignetteEncoding{UTF-8}
+---
+
+<!--
+%\VignetteEngine{knitr::rmarkdown}
+%\VignetteIndexEntry{large single-cell datasets}
+-->
+
+# Introduction
+
+```{r options, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(cache=FALSE, error=FALSE, message=FALSE, warning=FALSE)
+```
+
+This workshop illustrates the latest Bioconductor infrastructure to analyze large single-cell datasets that may not entirely fit in memory.
+
+We focus on the most common application in exploratory single-cell analysis, namely to find subpopulations of cells.
+
+The proposed workflow consists of the following steps:
+
+1. Normalization;
+2. Dimensionality reduction;
+3. Clustering.
+
+We will exploit a number of Bioconductor packages able to interact with the HDF5 on-disk data representation, freeing us of the need to load the full dataset in memory.
+
+Note that this workshop is a high-level introduction to the analysis of large datasets from a user perspective. The focus is on packages that the user may directly use to analyze such data. The focus is NOT the direct interaction with infrastructural packages (such as the `DelayedArray` package) and is not aimed at developers wishing to build upon this infrastructure. If you are interested in these topics, see the workshop "Effectively using the DelayedArray framework to support the analysis of large data sets."
+
+## Interacting with HDF5 files in R/Bioconductor
+
+Here, we provide a brief introduction on the HDF5 infrastrucure in R/Bioconductor. See "Effectively using the DelayedArray framework to support the analysis of large data sets" for a more technical treatment of the topic.
+
+At the low-level, the main interface between HDF5 and Bioconductor is implemented in the packages [rhdf5](http://bioconductor.org/packages/rhdf5/), which provides read/write functionalities, [Rhdf5lib](http://bioconductor.org/packages/Rhdf5lib/), which provides C and C++ HDF5 libraries, and [beachmat](http://bioconductor.org/packages/beachmat) [@beachmat], which provides a consistent C++ class interface for a variety of commonly used matrix types, including sparse and HDF5-backed matrices.
+
+These packages are useful for developers that want to develop methods able to interact with HDF5 datasets. However, for most Bioconductor users interested in the analysis of single-cell data, the entry point is represented by the high-level class `SingleCellExperiment` (implemented in the [SingleCellExperiment package](http://bioconductor.org/packages/SingleCellExperiment) ) and the lower level classes `HDF5Matrix` and `DelayedMatrix`, which can be stored in the `assay` slot of a `SingleCellExperiment` object. These matrix classes are implemented in the [HDF5Array](http://bioconductor.org/packages/HDF5Array) and [DelayedArray](http://bioconductor.org/packages/DelayedArray) packages, respectively. Once the data are stored in a `SingleCellExperiment` object with `HDF5Matrix` or `DelayedMatrix` as its assay, the packages [scater](http://bioconductor.org/packages/scater) [@scater], [scran](http://bioconductor.org/packages/scran) [@scran], [BiocSingular](http://bioconductor.org/packages/BiocSingular) and [mbkmeans](http://bioconductor.org/packages/mbkmeans) can be seamlessly used.
+
+The package [DelayedMatrixStats](http://bioconductor.org/packages/DelayedMatrixStats)  deserves a special mention: it implements the rich API of the CRAN package [matrixStats](http://bioconductor.org/packages/matrixStats) for `HDF5Matrix` and `DelayedMatrix` objects.
+
+We invite the reader to find more details on all the mentioned packages in their relative vignettes. In the remainder of this workshop, we will use these methods to find cell sub-populations in a real datasets.
+
+## The `SingleCellExperiment` class
+
+Add description of the class, with figure.
+
+## The dataset
+
+To illustrate the analysis of large datasets, we use the largest of the Human Cell Atlas preview datasets available in the [HCAData](http://bioconductor.org/packages/HCAData) Bioconductor package.
+
+The Human Cell Atlas is an international collaborative effort to map every cell type present in the human body [@hca]. We focus on a set on the _Census of Immune Cells_ dataset, specifically on the bone marrow subset (see https://preview.data.humancellatlas.org for additional details).
+
+The dataset consists of 378,000 immune cells from the bone marrow of 8 healthy donors, processed with the 10X Genomics Chromium v2 platform at the Broad Institute. For each donor, 8 libraries were prepared, and 6000 cells were sequenced for each library.
+
+### Preprocessing
+
+The data available in the package has already been preprocessed and the package contains a matrix of raw counts (in HDF5 format) of the top 6000 cell barcodes ranked by total UMI per barcode.
+
+The raw counts were generated by Cell Ranger with GRCh38, standard 10X reference.
+
+Note that:
+
+- For each channel approximately 7000 cells were loaded, and the authors expect about 4000 non-empty droplets.
+- Filtering of low quality barcodes is recommended.
+
+More information on the preprocessing is available on the [HCA website](https://preview.data.humancellatlas.org).
+
+### Loading the data in R
+
+We use the `HCAData` package, which uses [ExperimentHub](http://bioconductor.org/packages/ExperimentHub) to retrieve the data. Note that this is a time consuming step, because it needs to download the remotely hosted HDF5 matrix. DR: CONSIDER HOSTING SOMEWHERE JUST THE SUBSET?
+
+```{r datain}
+start_time <- Sys.time()
+library(HCAData)
+library(ExperimentHub)
+library(SingleCellExperiment)
+
+eh <- ExperimentHub()
+query(eh, "HCAData")
+
+sce <- HCAData("ica_bone_marrow")
+sce
+```
+
+The object `sce` of class `SingleCellExperiment` contains the data in the assay `counts`, as well as a set of row and column data, accessible with the `rowData()` and `colData()` functions, respectively.
+
+The assay `counts` is a `DelayedMatrix` with `HDF5` backend that contains the gene expression data. It can be retrieve with either the `counts()` or `assay()` functions.
+
+```{r counts}
+counts(sce)
+```
+
+To check how where data is stored, we can use the `seed()` function, which gives valuable information on the geometry of the HDF5 file.
+
+```{r seed}
+seed(counts(sce))
+```
+
+### Library information
+
+Unfortunately, the column data does not include any metadata on the libraries, although some is available at the HCA website.
+
+We can extract information on the donors and libraries by parsing the barcodes.
+
+```{r parse_cells}
+library(stringr)
+cell_info <- str_split(colData(sce)$Barcode, "_", simplify = TRUE)
+donor <- cell_info[,1]
+lib <- paste0(donor, "_", str_split(cell_info[,3], "-", simplify = TRUE)[,1])
+colData(sce)$donor <- donor
+colData(sce)$lib <- lib
+```
+
+We add donor and library information to the column data. This will be useful for subsetting.
+
+### Subsetting
+
+To work with a small enough dataset, we will randomly subsample the data to have only 50 cells per library. This will allow us to run the workshop in a reasonable time, while preserving the batch structure typical of a large-scale experiment.
+
+Note that it is sufficient to add `eval=FALSE` to the next code chunk to run the workflow on the full dataset.
+
+```{r subset}
+library(dplyr)
+
+set.seed(50)
+
+colData(sce) %>%
+  as.data.frame() %>%
+  group_by(lib) %>%
+  sample_n(50) %>% 
+  pull(Barcode) -> cell_idx
+
+sce <- sce[, cell_idx]
+sce
+counts(sce)
+```
+
+Note that because we have not actually made any computations, the original HDF5 file is untouched.
+
+```{r seed2}
+seed(counts(sce))
+```
+
+To avoid reading from this huge file, it is best to save the subset on a new, smaller HDF5 file. This can be done with the `realize()` function.
+
+```{r realize}
+counts(sce) <- realize(counts(sce), BACKEND = "HDF5Array")
+seed(counts(sce))
+```
+
+This is a time consuming step, but will make the subsequent calls much faster.
+
+## Parallel computing
+
+For the workshop, we run the workflow in serial mode. When running the workflow on large datasets, we recommend running the workflow in parallel, by using the [BiocParallel package](http://bioconductor.org/packages/BiocParallel). See the BiocParallel vignette for more information on parallel computing.
+
+```{r serial}
+library(BiocParallel)
+register(SerialParam())
+register(MulticoreParam(6)) ## remove this!
+```
+
+# Quality control 
+
+## Filtering of low-quality samples
+
+First, we use the `scater` package to compute a set of QC measures and filter out the low-quality samples.
+
+```{r scater}
+library(scater)
+
+sce <- calculateQCMetrics(sce, 
+          feature_controls=list(Mito=grep("^MT", rowData(sce)$Symbol)))
+```
+
+We remove cells with low UMI counts and high proportion of mitocondrial reads, using it as a proxy for cell damage. 
+
+```{r remove_cells}
+high_mito <- isOutlier(sce$pct_counts_Mito, nmads=3, type="higher")
+low_counts <- sce$total_counts < 100
+table((!high_mito) & (!low_counts))
+sce <- sce[, (!high_mito) & (!low_counts)]
+sce
+```
+
+## Removal of lowly expressed genes
+
+In addition, we keep only those genes that have at least 1 UMI in at least 5% of the data. These threshold are dataset-specific and may need to be taylored to specific applications.
+
+```{r remove_genes}
+num_reads <- 1
+num_cells <- 0.05*ncol(sce)
+keep <- which(DelayedArray::rowSums(counts(sce) >= num_reads ) >= num_cells)
+sce <- sce[keep,]
+sce
+```
+
+Again, it is worth `realize()`-ing the matrix to speed up calculations.
+
+```{r realize2}
+counts(sce) <- realize(counts(sce), BACKEND = "HDF5Array")
+seed(counts(sce))
+```
+
+# Normalization
+
+Normalization is a crucial step in the preprocessing of the results. Here, we use the `scran` package to compute size factors that we will use to compute the normalized log-expression values.
+
+It has been shown that the scran method works best if the size factors are computed within roughly homogeneous cell populations; hence, it is beneficial to run a quick clustering on the raw data to compute better size factors. This ensures that we do not pool cells that are very different. Note that this is not the final clustering to identify cell sub-populations.
+
+In order to carry out this clustering, we use a mini-batch k-means algorithm, implemented in the `mbkmeans` package. We will talk more about the details of this method in the Clustering section.
+
+DR: CONSIDER NORMALIZING EACH BATCH INDEPENDENTLY AND THEN MERGING THEM WITH MNN.
+
+```{r scran}
+library(scran)
+library(mbkmeans)
+set.seed(1000)
+
+clusters <- mbkmeans(counts(sce), clusters=10, batch_size = 100)
+table(clusters$Clusters)
+sce <- computeSumFactors(sce, min.mean=0.1, cluster=clusters$Clusters)
+```
+
+It is useful to check whether the size factors are correlated with the total number of reads per cell.
+
+```{r plot_scran}
+plot(sce$total_counts, sizeFactors(sce), log="xy", xlab="Total reads", ylab="scran size factors")
+```
+
+Finally, we compute normalized log-expression values with the `normalize()` function from the `scater` package.
+
+```{r norm}
+sce <- scater::normalize(sce)
+```
+
+Note that the log-normalized data are stored in the `logcounts` assay of the object. Since the `counts` assay is a `DelayedMatrix` and we have only one set of size factors in the object, also the normalized data are stored as a `DelayedMatrix`.
+
+```{r logcounts}
+logcounts(sce)
+```
+
+This allows us to store in memory only the `colData` and `rowData`, resulting in a fairly small object.
+
+```{r size}
+library(pryr)
+object_size(sce)
+```
+
+# Dimensionality reduction
+
+## PCA
+
+```{r pca}
+library(BiocSingular)
+library(DelayedMatrixStats)
+
+## find most variable genes
+vars <- DelayedMatrixStats::rowVars(logcounts(sce))
+names(vars) <- rownames(sce)
+vars <- sort(vars, decreasing = TRUE)
+
+for_pca <- t(logcounts(sce)[names(vars)[1:1000],])
+
+pca <- BiocSingular::runPCA(for_pca, rank = 30,
+                             scale = TRUE,
+                             BSPARAM = RandomParam(deferred = FALSE))
+
+reducedDim(sce, "PCA") <- pca$x
+sce
+```
+
+```{r, plot_pca}
+plotPCA(sce, colour_by = "donor")
+```
+
+# Mini-batch k-means
+
+## Choose the number of clusters
+
+```{r}
+wcss <- lapply(10:20, function(k) {
+  cl <- mbkmeans(sce, reduceMethod = "PCA", clusters = k,
+                 batch_size = 100, num_init=10, max_iters=100,
+                 calc_wcss = TRUE)
+})
+```
+
+```{r}
+plot(10:20, sapply(wcss, function(x) sum(x$WCSS_per_cluster)),
+     type="b",
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+```{r}
+clusters2 <- mbkmeans(sce, reduceMethod = "PCA", clusters=19, 
+                                  batch_size=500,
+                                  num_init = 10, max_iters = 100)
+
+sce$cluster <- as.factor(clusters2$Clusters)
+```
+
+## Visualization
+
+```{r}
+sce <- runTSNE(sce, use_dimred = "PCA",
+               external_neighbors=TRUE, 
+               BNPARAM = BiocNeighbors::AnnoyParam(),
+               nthreads = 1)
+
+plotTSNE(sce, colour_by = "cluster")
+plotTSNE(sce, colour_by = "donor")
+
+plotTSNE(sce, colour_by = "ENSG00000090382") + ggtitle("LYZ (CD14+)")
+plotTSNE(sce, colour_by = "ENSG00000156738") + ggtitle("MS4A1 (B-cells)")
+plotTSNE(sce, colour_by = "ENSG00000105374") + ggtitle("NKG7 (NK-cells)")
+```
+
+```{r}
+library(uwot)
+sce <- runUMAP(sce, use_dimred = "PCA",
+               external_neighbors=TRUE, 
+               BNPARAM = BiocNeighbors::AnnoyParam())
+
+plotUMAP(sce, colour_by = "cluster")
+plotUMAP(sce, colour_by = "donor")
+```
+
+DR: CONSIDER ADDING BATCH EFFECT CORRECTION?
+
+# Time
+
+```{r}
+print(Sys.time() - start_time)
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
+```
+
+# References
