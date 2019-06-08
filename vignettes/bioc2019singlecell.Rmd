@@ -4,8 +4,11 @@ author: "Davide Risso, Stephanie Hicks, Elizabeth Purdom"
 date: "Last modified: May 21, 2019; Compiled: `r format(Sys.time(), '%B %d, %Y')`"
 bibliography: "`r system.file(package='bioc2019singlecell', 'vignettes', 'biblio.bib')`"
 output:
-  BiocStyle::html_document:
+  rmarkdown::html_document:
+    highlight: pygments
     toc: true
+    toc_depth: 3
+    fig_width: 5
 vignette: >
   %\VignetteEncoding{UTF-8}
 ---
@@ -15,7 +18,9 @@ vignette: >
 %\VignetteIndexEntry{large single-cell datasets}
 -->
 
-# Introduction
+# Analysis of Large Single-Cell RNA-Seq Datasets in R/Bioconductor
+
+## Introduction
 
 ```{r options, include=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(cache=FALSE, error=FALSE, message=FALSE, warning=FALSE)
@@ -167,9 +172,9 @@ register(SerialParam())
 register(MulticoreParam(6)) ## remove this!
 ```
 
-# Quality control 
+## Quality control 
 
-## Filtering of low-quality samples
+### Filtering of low-quality samples
 
 First, we use the `scater` package to compute a set of QC measures and filter out the low-quality samples.
 
@@ -190,7 +195,7 @@ sce <- sce[, (!high_mito) & (!low_counts)]
 sce
 ```
 
-## Removal of lowly expressed genes
+### Removal of lowly expressed genes
 
 In addition, we keep only those genes that have at least 1 UMI in at least 5% of the data. These threshold are dataset-specific and may need to be taylored to specific applications.
 
@@ -209,7 +214,7 @@ counts(sce) <- realize(counts(sce), BACKEND = "HDF5Array")
 seed(counts(sce))
 ```
 
-# Normalization
+## Normalization
 
 Normalization is a crucial step in the preprocessing of the results. Here, we use the `scran` package to compute size factors that we will use to compute the normalized log-expression values.
 
@@ -254,9 +259,7 @@ library(pryr)
 object_size(sce)
 ```
 
-# Dimensionality reduction
-
-## PCA
+## Dimensionality reduction
 
 ```{r pca}
 library(BiocSingular)
@@ -281,9 +284,9 @@ sce
 plotPCA(sce, colour_by = "donor")
 ```
 
-# Mini-batch k-means
+## Clustering with Mini-batch k-means
 
-## Choose the number of clusters
+### Choose the number of clusters
 
 ```{r}
 wcss <- lapply(10:20, function(k) {
@@ -308,7 +311,7 @@ clusters2 <- mbkmeans(sce, reduceMethod = "PCA", clusters=19,
 sce$cluster <- as.factor(clusters2$Clusters)
 ```
 
-## Visualization
+### Visualization
 
 ```{r}
 sce <- runTSNE(sce, use_dimred = "PCA",
@@ -336,17 +339,17 @@ plotUMAP(sce, colour_by = "donor")
 
 DR: CONSIDER ADDING BATCH EFFECT CORRECTION?
 
-# Time
+## Time
 
 ```{r}
 print(Sys.time() - start_time)
 ```
 
 
-# Session Info
+## Session Info
 
 ```{r}
 sessionInfo()
 ```
 
-# References
+## References
