@@ -304,7 +304,7 @@ plot(10:20, sapply(wcss, function(x) sum(x$WCSS_per_cluster)),
 ```
 
 ```{r}
-clusters2 <- mbkmeans(sce, reduceMethod = "PCA", clusters=19, 
+clusters2 <- mbkmeans(sce, reduceMethod = "PCA", clusters=16, 
                                   batch_size=500,
                                   num_init = 10, max_iters = 100)
 
@@ -328,7 +328,6 @@ plotTSNE(sce, colour_by = "ENSG00000105374") + ggtitle("NKG7 (NK-cells)")
 ```
 
 ```{r}
-library(uwot)
 sce <- runUMAP(sce, use_dimred = "PCA",
                external_neighbors=TRUE, 
                BNPARAM = BiocNeighbors::AnnoyParam())
