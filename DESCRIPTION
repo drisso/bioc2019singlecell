@@ -13,7 +13,7 @@ Description:
     In this workshop, we will illustrate some questions that can be answered 
     using scRNA-seq data and demonstrate through case studies and tutorials
     how to answer those questions using R / Bioconductor packages.
-License: file LICENSE
+License: CC BY 4.0  + file LICENSE
 Depends: 
    R (>= 3.6),
    SingleCellExperiment
