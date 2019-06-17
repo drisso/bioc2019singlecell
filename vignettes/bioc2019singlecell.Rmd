@@ -1,7 +1,7 @@
 ---
 title: "Analysis of Large Single-Cell RNA-Seq Datasets in R/Bioconductor"
 author: "Davide Risso, Stephanie Hicks, Elizabeth Purdom"
-date: "Last modified: May 21, 2019; Compiled: `r format(Sys.time(), '%B %d, %Y')`"
+date: "Last modified: June 17, 2019; Compiled: `r format(Sys.time(), '%B %d, %Y')`"
 bibliography: "`r system.file(package='bioc2019singlecell', 'vignettes', 'biblio.bib')`"
 output:
   rmarkdown::html_document:
@@ -337,6 +337,27 @@ sce <- runUMAP(sce, use_dimred = "PCA",
 
 plotUMAP(sce, colour_by = "cluster")
 plotUMAP(sce, colour_by = "donor")
+```
+
+## Remove batch effects
+
+Let's assume that we are not interested in the differences between donors and we want to correct for the potential batch effects introduced by the collection of cells across individuals, potentially at different times.
+
+There are several ways to correct for batch effects, but in this workshop we will focus on the Mutual Nearest Neighbor (MNN) method [@mnn]. The main reason is that thanks to the [batchelor](http://bioconductor.org/packages/batchelor) and [BiocNeighbors](http://bioconductor.org/packages/BiocNeighbors) packages, there is a scalable and fast (approximate) implementation.
+
+```{r}
+library(batchelor)
+mnn_res <- fastMNN(sce, batch = sce$donor, use.dimred = "PCA")
+reducedDim(sce, "corrected") <- mnn_res$corrected
+reducedDim(sce, "TSNE_orig") <- reducedDim(sce, "TSNE")
+
+sce <- runTSNE(sce, use_dimred = "corrected",
+               external_neighbors=TRUE, 
+               BNPARAM = BiocNeighbors::AnnoyParam(),
+               nthreads = 1)
+
+plotTSNE(sce, colour_by = "cluster")
+plotTSNE(sce, colour_by = "donor")
 ```
 
 ## Time
