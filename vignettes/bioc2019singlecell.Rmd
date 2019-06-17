@@ -54,7 +54,13 @@ We invite the reader to find more details on all the mentioned packages in their
 
 ## The `SingleCellExperiment` class
 
-Add description of the class, with figure.
+Throughout the workshop, we use the class `SingleCellExperiment` to keep track of the counts and their associated metadata within a single object. 
+
+```{r sceschema, echo=FALSE, out.width="90%", fig.cap="Schematic view of the SingleCellExperiment class."}
+knitr::include_graphics(system.file(package='bioc2019singlecell', 'vignettes', 'sce.png'))
+```
+
+The `colData` component contains information on the samples, such as quality control measures, sequencing batch ID. The normalization factors will be saved in the `sizeFactor` component. The `reducedDim` component will store the principal components, t-SNE coordinates, and other low dimensional representations of the data.
 
 ## The dataset
 
@@ -79,7 +85,7 @@ More information on the preprocessing is available on the [HCA website](https://
 
 ### Loading the data in R
 
-We use the `HCAData` package, which uses [ExperimentHub](http://bioconductor.org/packages/ExperimentHub) to retrieve the data. Note that this is a time consuming step, because it needs to download the remotely hosted HDF5 matrix. DR: CONSIDER HOSTING SOMEWHERE JUST THE SUBSET?
+We use the `HCAData` package, which uses [ExperimentHub](http://bioconductor.org/packages/ExperimentHub) to retrieve the data. Note that this is a time consuming step, because it needs to download the remotely hosted HDF5 matrix.
 
 ```{r datain}
 start_time <- Sys.time()
@@ -168,8 +174,7 @@ For the workshop, we run the workflow in serial mode. When running the workflow 
 
 ```{r serial}
 library(BiocParallel)
-register(SerialParam())
-register(MulticoreParam(6)) ## remove this!
+BiocParallel::register(SerialParam())
 ```
 
 ## Quality control 
@@ -221,8 +226,6 @@ Normalization is a crucial step in the preprocessing of the results. Here, we us
 It has been shown that the scran method works best if the size factors are computed within roughly homogeneous cell populations; hence, it is beneficial to run a quick clustering on the raw data to compute better size factors. This ensures that we do not pool cells that are very different. Note that this is not the final clustering to identify cell sub-populations.
 
 In order to carry out this clustering, we use a mini-batch k-means algorithm, implemented in the `mbkmeans` package. We will talk more about the details of this method in the Clustering section.
-
-DR: CONSIDER NORMALIZING EACH BATCH INDEPENDENTLY AND THEN MERGING THEM WITH MNN.
 
 ```{r scran}
 library(scran)
@@ -335,8 +338,6 @@ sce <- runUMAP(sce, use_dimred = "PCA",
 plotUMAP(sce, colour_by = "cluster")
 plotUMAP(sce, colour_by = "donor")
 ```
-
-DR: CONSIDER ADDING BATCH EFFECT CORRECTION?
 
 ## Time
 

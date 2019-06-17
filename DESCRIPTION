@@ -1,7 +1,7 @@
 Package: bioc2019singlecell
 Type: Package
 Title: Analysis of Large Single-Cell RNA-Seq Datasets in R/Bioconductor
-Version: 0.0.1
+Version: 0.0.2
 Authors@R: 
     c(person("Davide","Risso", role=c("aut","cre", "cph"), 
           email="risso.davide@gmail.com" ),
